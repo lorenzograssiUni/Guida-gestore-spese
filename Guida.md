@@ -350,3 +350,47 @@ Buona fortuna per la tua esposizione!
 
 ---
 *Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
+
+
+## 🛠️ Capitolo 11: Gestione dello Schema, Ambiente e Principi SOLID
+
+Per completare la comprensione architetturale, è essenziale analizzare come il progetto gestisce l'evoluzione del database, la configurazione dell'ambiente di esecuzione e l'aderenza ai principi di ingegneria del software.
+
+### 11.1 Evoluzione del Database: Migrazioni EF Core
+
+Il progetto utilizza le **Migrazioni di Entity Framework Core** per gestire le modifiche allo schema del database nel tempo. Questo approccio "Code-First" permette di definire il database tramite classi C# e di generare script SQL per aggiornare il database fisico.
+
+*   **`ApplicationDbContextModelSnapshot.cs`**: Questo file, generato automaticamente, rappresenta lo stato attuale del modello del database. È fondamentale per EF Core per calcolare le differenze (diff) quando viene creata una nuova migrazione. Analizzando questo file, si può vedere la traduzione esatta delle classi C# in tabelle relazionali, inclusi i tipi di colonna (es. `decimal(10, 2)` per `Importo`), i vincoli di lunghezza (`HasMaxLength(100)` per `Nome`) e le chiavi esterne.
+*   **Vantaggi**: Le migrazioni garantiscono che il database sia sempre sincronizzato con il codice, permettono il versionamento dello schema (come si fa con il codice sorgente tramite Git) e facilitano il deployment in ambienti diversi (sviluppo, test, produzione) eseguendo semplicemente le migrazioni pendenti all'avvio dell'applicazione (come visto in `Program.cs` con `context.Database.EnsureCreated()`, sebbene in produzione si preferisca `context.Database.Migrate()`).
+
+### 11.2 Configurazione dell'Ambiente (Vite e ASP.NET Core)
+
+La configurazione dell'ambiente è cruciale per il corretto funzionamento e la build dell'applicazione.
+
+*   **Frontend (`vite.config.js`)**: Il progetto React utilizza **Vite** come build tool, scelto per la sua estrema velocità rispetto a Webpack. Il file di configurazione include i plugin per React e Tailwind CSS. Un dettaglio interessante è la configurazione `resolve.dedupe: ['react', 'react-dom', 'react-router-dom']`. Questa istruzione forza Vite a utilizzare una singola istanza di queste librerie, prevenendo errori complessi che possono verificarsi quando dipendenze multiple includono versioni diverse di React.
+*   **Backend (`appsettings.json`)**: Questo file contiene la configurazione dell'applicazione ASP.NET Core. Definisce la stringa di connessione di default (`"Data Source=gestionespese.db"`), i livelli di logging e gli host consentiti. È importante notare che in `Program.cs` il percorso del database viene sovrascritto programmaticamente (`Path.Combine("C:\\home", "gestionespese.db")`) per adattarsi all'ambiente di deployment previsto (Azure App Service), dimostrando flessibilità nella gestione della configurazione.
+
+### 11.3 Applicazione dei Principi SOLID
+
+Il progetto Split Mate dimostra un'aderenza ai principi SOLID, fondamentali per la creazione di software manutenibile e scalabile:
+
+*   **Single Responsibility Principle (SRP)**: Ogni classe ha una singola responsabilità. I Controller (es. `SpesaController`) gestiscono solo le richieste HTTP e l'orchestrazione, i Modelli (es. `Spesa`) rappresentano solo i dati, e il `ApplicationDbContext` gestisce solo la persistenza. Nel frontend, i componenti React (es. `GraficoTorta`) sono focalizzati su una singola parte dell'interfaccia.
+*   **Open/Closed Principle (OCP)**: Il sistema è aperto all'estensione ma chiuso alla modifica. Ad esempio, l'aggiunta di un nuovo tipo di grafico nel frontend non richiederebbe la modifica del componente `DettaglioGruppo`, ma solo l'inclusione del nuovo componente.
+*   **Dependency Inversion Principle (DIP)**: Come discusso in precedenza, il backend utilizza ampiamente la Dependency Injection. I controller dipendono da astrazioni (o istanze fornite dal framework) piuttosto che creare concretamente le proprie dipendenze, disaccoppiando il codice e facilitando il testing.
+
+---
+
+## 🚀 Capitolo 12: Evoluzione e Roadmap Futura
+
+Un progetto software non è mai veramente "finito". Per dimostrare una visione a lungo termine, ecco alcune direzioni in cui Split Mate potrebbe evolvere:
+
+1.  **Autenticazione Robusta (JWT e OAuth)**: Sostituire l'auto-provisioning con un sistema di registrazione completo, verifica email e autenticazione basata su **JSON Web Tokens (JWT)**. Integrare login tramite provider esterni (Google, GitHub) tramite OAuth 2.0 per migliorare l'onboarding.
+2.  **Architettura a Microservizi**: Se l'applicazione dovesse scalare massivamente, il backend monolitico potrebbe essere suddiviso in microservizi (es. Servizio Utenti, Servizio Spese, Servizio Notifiche), comunicanti tramite code di messaggi (es. RabbitMQ) per una maggiore resilienza.
+3.  **Real-time Updates (SignalR / WebSockets)**: Implementare aggiornamenti in tempo reale. Quando un utente aggiunge una spesa, gli altri membri del gruppo connessi dovrebbero vedere l'aggiornamento istantaneamente senza dover ricaricare la pagina, utilizzando tecnologie come SignalR nel backend ASP.NET Core.
+4.  **Test Automatizzati (Unit e E2E)**: Introdurre una suite completa di test. Test unitari per la logica di bilanciamento nel backend (usando xUnit o NUnit) e test End-to-End (E2E) per il frontend (usando Cypress o Playwright) per garantire la stabilità durante le refattorizzazioni.
+5.  **PWA (Progressive Web App)**: Trasformare il frontend React in una PWA per permettere l'installazione sui dispositivi mobili, il supporto offline e le notifiche push, avvicinando l'esperienza utente a quella di un'app nativa.
+
+Queste evoluzioni dimostrano la capacità di pensare oltre l'implementazione attuale e di progettare per la scalabilità, la sicurezza e l'esperienza utente di livello enterprise.
+
+---
+*Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
