@@ -1,109 +1,111 @@
-# 💲 Guida Definitiva a Split Mate: Gestore Spese di Gruppo
+# 📔 Manuale Tecnico Split Mate: Architettura e Sviluppo Full-Stack
 
-Benvenuti nella guida ufficiale per comprendere, studiare ed esporre il progetto **Split Mate**. Questa guida è pensata per essere letta da chiunque: dal programmatore esperto al compagno di studi che non ha mai visto una riga di codice.
-
-L'obiettivo è trasformare concetti tecnici complessi in concetti semplici e quotidiani, permettendo a tutti di saper spiegare il progetto "alla perfezione".
+Benvenuti nel manuale definitivo di **Split Mate**. Questo documento non è una semplice guida, ma un trattato tecnico progettato per fornire una comprensione profonda e accademica del progetto. Studiare questo manuale significa acquisire la capacità di navigare nel codice, comprendere le scelte architettoniche e saper esporre il progetto con la padronanza di chi lo ha concepito.
 
 ---
 
-## 📖 1. Il Progetto in Breve
-**Split Mate** è una Web Application (un sito web interattivo) che risolve un problema comune: **chi deve soldi a chi?**
-Immagina una vacanza con amici o una cena: qualcuno paga la pizza, qualcuno le bibite, qualcuno il taxi. Alla fine, fare i conti è un incubo. Split Mate lo fa in automatico, minimizzando il numero di scambi di denaro necessari.
+## 🏛️ Capitolo 1: Architettura del Sistema
+
+### 1.1 Paradigma Full-Stack
+Split Mate è implementato seguendo il paradigma **Decoupled Architecture** (Architettura Disaccoppiata). Il sistema è diviso in due entità distinte che comunicano esclusivamente tramite protocolli standard:
+
+1.  **Server-Side (Backend)**: Un'applicazione ASP.NET Core che funge da *Provider di Risorse*. Espone endpoint RESTful e gestisce la persistenza dei dati.
+2.  **Client-Side (Frontend)**: Una Single-Page Application (SPA) sviluppata in React. È il *Consumatore di Risorse* che gestisce lo stato dell'interfaccia e l'esperienza utente.
+
+### 1.2 Flusso dei Dati (Data Flow)
+La comunicazione avviene tramite il protocollo **HTTP** utilizzando il formato **JSON** (JavaScript Object Notation) per lo scambio di dati. 
+*   **Request**: Il frontend invia verbi HTTP (`GET`, `POST`, `PUT`, `DELETE`) verso URL specifici.
+*   **Response**: Il backend elabora la richiesta, interagisce con il database SQLite e restituisce un codice di stato (es. `200 OK`, `404 Not Found`) e i dati richiesti.
 
 ---
 
-## 💡 2. Glossario: I termini tecnici spiegati "facile"
-Prima di entrare nel codice, capiamo le parole che useremo. Se devi esporre il progetto, usa queste definizioni:
+## 🗄️ Capitolo 2: Modellazione dei Dati (Il Database)
 
-| Termine | Spiegazione Semplice | Esempio Reale |
-| :--- | :--- | :--- |
-| **Frontend** | Tutto ciò che l'utente vede e clicca. La "vetrina" del negozio. | I pulsanti, i grafici e i moduli dell'app. |
-| **Backend** | Il "cervello" invisibile che fa i calcoli e salva i dati. La "cucina" del ristorante. | La logica che decide chi deve dare soldi a chi. |
-| **API** | Il "cameriere" che porta le ordinazioni dal tavolo (Frontend) alla cucina (Backend). | Quando clicchi "Salva spesa", l'API porta i dati al server. |
-| **Database** | L'archivio digitale dove le informazioni restano salvate per sempre. | La lista degli utenti e delle spese salvata nel file `gestionespese.db`. |
-| **REST** | Un modo standard e ordinato di organizzare le API. | Usare indirizzi chiari come `/api/Spesa` per gestire le spese. |
-| **Swagger** | Una pagina web di servizio che elenca tutte le API disponibili per provarle. | Una sorta di "manuale d'uso" interattivo per gli sviluppatori. |
-| **SPA (Single Page Application)** | Un sito che non si ricarica mai completamente quando clicchi, rendendolo fluidissimo. | Come l'app di Instagram o Gmail. |
-| **ORM (Entity Framework)** | Un traduttore che permette al codice (C#) di parlare con il Database senza scrivere linguaggi complessi (SQL). | Trasforma una "classe" Spesa in una "tabella" nel database. |
-| **CORS** | Una guardia di sicurezza che decide chi può parlare con il server. | Permette al sito (Vercel) di comunicare con il server (Azure). |
+Il cuore della persistenza è **Entity Framework Core**, un ORM (Object-Relational Mapper) che permette di mappare classi C# in tabelle relazionali.
 
----
+### 2.1 Schema Relazionale
+Il database è composto da cinque entità principali interconnesse:
 
-## 🛠 3. Lo Stack Tecnologico (I Software utilizzati)
-Il progetto è costruito con le tecnologie più moderne del settore:
+1.  **Utente**: L'entità centrale. Gestisce identità (`Email`, `Nome`) e sicurezza (`PasswordHash`).
+2.  **Gruppo**: Un'entità collettiva che aggrega utenti. Possiede un `CodiceInvito` univoco generato tramite `Guid`.
+3.  **Spesa**: Registra un evento economico. È legata a un "Pagatore" e a un "Gruppo".
+4.  **DivisioneSpesa**: Una tabella di associazione "Granulare". Specifica quanto ogni singolo utente deve per una specifica spesa.
+5.  **Riepilogo**: Memorizza lo stato finale dei debiti calcolati, permettendo di segnarli come "Saldati".
 
-### ⚙️ Backend (Il Motore)
-*   **ASP.NET Core 10.0**: Il framework di Microsoft per creare server veloci e sicuri.
-*   **Entity Framework Core**: Per gestire il database in modo intelligente.
-*   **SQLite**: Un database leggero che salva tutto in un unico file, perfetto per questo progetto.
-*   **BCrypt**: Un sistema di sicurezza per "criptare" le password (non vengono salvate in chiaro, così nessuno può rubarle).
+### 2.2 Codice: La Definizione del Modello (Esempio `Spesa.cs`)
+```csharp
+public class Spesa {
+    [Key] // Chiave primaria autoincrementale
+    public int Id { get; set; }
 
-### 🖥️ Frontend (L'Interfaccia)
-*   **React**: La libreria più usata al mondo per creare interfacce interattive.
-*   **Vite**: Lo strumento ultra-veloce che prepara il codice per essere letto dal browser.
-*   **Tailwind CSS**: Un sistema per dare uno stile moderno e pulito all'app (colori, bordi arrotondati, ombre).
-*   **Lucide React**: La libreria che fornisce le icone eleganti che vedi nell'app.
+    [ForeignKey("Gruppo")] // Vincolo di integrità referenziale
+    public int Gruppo_ID { get; set; }
+
+    [Required] // Vincolo di obbligatorietà a livello DB
+    [Range(0.01, double.MaxValue)]
+    public decimal Importo { get; set; }
+
+    public virtual ICollection<DivisioneSpesa> Divisioni { get; set; } // Proprietà di navigazione
+}
+```
 
 ---
 
-## 🏗 4. Architettura: Come "viaggiano" i dati
-Il flusso è circolare e semplicissimo:
-1.  **L'Utente** compie un'azione sul **Frontend** (es. inserisce una spesa).
-2.  Il **Frontend** invia una richiesta tramite **API** al **Backend**.
-3.  Il **Backend** riceve i dati, fa i calcoli e li salva nel **Database**.
-4.  Il **Backend** risponde al **Frontend** dicendo "Fatto!".
-5.  Il **Frontend** si aggiorna e mostra i nuovi dati all'utente (es. il grafico a torta cambia).
+## ⚙️ Capitolo 3: Logica di Business e Controller
+
+I Controller sono i direttori d'orchestra del backend. Utilizzano la **Dependency Injection** per accedere al contesto del database.
+
+### 3.1 L'Algoritmo di Bilanciamento (`GruppoController.cs`)
+Questa è la funzione tecnicamente più complessa. L'obiettivo è minimizzare le transazioni.
+1.  **Fase di Aggregazione**: Viene creato un dizionario `saldi` dove per ogni utente si somma quanto ha pagato e si sottrae quanto deve (estratto da `DivisioneSpesa`).
+2.  **Fase di Classificazione**: Gli utenti vengono divisi in due liste: `debitori` (saldo negativo) e `creditori` (saldo positivo), ordinate per entità del saldo.
+3.  **Fase di Matching (Greedy Algorithm)**: Il sistema accoppia il maggior debitore con il maggior creditore, risolvendo il debito e aggiornando i saldi residui finché la lista non è vuota.
+
+### 3.2 Gestione Autenticazione (`AuthController.cs`)
+Split Mate utilizza un approccio di **Auto-Provisioning**:
+*   Se un utente tenta il login con una mail non esistente, il sistema crea automaticamente l'account.
+*   Le password sono gestite tramite **BCrypt**, un algoritmo di hashing adattivo che include il "salt" per prevenire attacchi di tipo Rainbow Table.
 
 ---
 
-## 🔍 5. Analisi del Codice: I file che contano
-Se il professore ti chiede "Dove succede questa cosa?", ecco la risposta:
+## ⚛️ Capitolo 4: Il Frontend (React & Vite)
 
-### 📍 Backend (Cartella `gestione-spese`)
-*   **`Program.cs`**: È il punto di partenza. Qui viene configurato Swagger, il Database e chi può accedere (CORS).
-*   **`ApplicationDbContext.cs`**: È la "mappa" del database. Qui diciamo che un Gruppo può avere tanti Utenti e tante Spese.
-*   **`GruppoController.cs`**: Contiene la logica dei gruppi e, soprattutto, l'**algoritmo di bilancio** (il calcolo dei debiti).
-*   **`SpesaController.cs`**: Gestisce l'inserimento delle spese e decide come dividerle tra i membri selezionati.
-*   **`AuthController.cs`**: Gestisce l'accesso. Una particolarità: se inserisci una mail nuova, l'app ti registra automaticamente!
+### 4.1 Gestione dello Stato Globale
+In `App.jsx`, lo stato dell'utente è persistito nel `localStorage`. Questo permette all'utente di rimanere loggato anche dopo il refresh della pagina, migliorando la **User Retention**.
 
-### 📍 Frontend (Cartella `frontend-gestione-spese`)
-*   **`App.jsx`**: È il cuore del sito. Decide se mostrarti la pagina di Login o la Home.
-*   **`HomePage.jsx`**: Mostra i tuoi gruppi e ti permette di crearne di nuovi o unirti tramite codice.
-*   **`DettaglioGruppo.jsx`**: La pagina dove vedi la lista delle spese e i membri del gruppo.
-*   **`RiepilogoGruppo.jsx`**: Qui avvengono le magie grafiche (i grafici a torta e istogrammi) per vedere i debiti.
+### 4.2 Componenti e Hooks
+Il frontend sfrutta gli **Hooks** di React (`useState`, `useEffect`) per gestire il ciclo di vita dei dati:
+*   `useEffect`: Utilizzato per scatenare il recupero dei dati dal server non appena un componente viene visualizzato (es. caricamento dei gruppi nella Home).
+*   **Rendering Condizionale**: L'interfaccia cambia dinamicamente in base allo stato (es. se `utente` è null, mostra il form di login, altrimenti la dashboard).
+
+### 4.3 Visualizzazione Dati (SVG & Math)
+I grafici (`GraficoTorta.jsx`) non usano librerie esterne pesanti, ma sono disegnati manualmente tramite **SVG (Scalable Vector Graphics)**.
+*   Viene utilizzata la trigonometria (`Math.cos`, `Math.sin`) per calcolare i punti delle fette della torta in base alla percentuale di spesa.
 
 ---
 
-## 🧠 6. L'Algoritmo di Pareggio (Il "Cervello")
-Questa è la parte più importante da saper spiegare. Come fa l'app a dire "Marco deve dare 10€ a Luca"?
+## 🛡️ Capitolo 5: Sicurezza e Best Practices
 
-1.  **Calcolo del Saldo**: Per ogni persona, l'app calcola: `Quanto ha pagato - Quanto doveva pagare`.
-    *   Se il risultato è **positivo**, la persona è un **Creditore** (deve ricevere soldi).
-    *   Se il risultato è **negativo**, la persona è un **Debitore** (deve dare soldi).
-2.  **Pareggio Ottimizzato**: L'app prende il debitori più grande e il creditore più grande e li fa "incontrare".
-    *   *Esempio*: Se io devo 50€ e tu devi riceverne 30€, io ti do 30€. Ora io devo ancora 20€ a qualcun altro e tu sei a posto.
-3.  **Risultato**: Questo continua finché tutti i debiti sono estinti con il **minor numero di passaggi possibili**.
+1.  **CORS (Cross-Origin Resource Sharing)**: Configurato nel `Program.cs` per permettere solo comunicazioni autorizzate tra il dominio del frontend e del backend.
+2.  **Password Hashing**: Utilizzo di `BCrypt.Net` per garantire che le credenziali siano inattaccabili anche in caso di violazione del database.
+3.  **Integrità Referenziale**: Utilizzo di `DeleteBehavior.Restrict` in Entity Framework per impedire la cancellazione accidentale di dati correlati (es. non puoi cancellare un utente se ha ancora dei debiti attivi).
 
 ---
 
-## 🎨 7. Visualizzazione Dati: I Grafici
-Per rendere tutto più comprensibile, abbiamo usato dei grafici:
-*   **Grafico a Torta**: Mostra visivamente chi ha speso di più nel gruppo. Se una fetta è enorme, quella persona è il "finanziatore" del gruppo!
-*   **Grafico a Istogramma**: Mostra le spese nel tempo o i saldi individuali.
+## 📚 Capitolo 6: Glossario Avanzato per l'Esperto
+
+*   **Middleware**: Software che si inserisce nel ciclo di richiesta/risposta del server (es. per gestire la sicurezza o i log).
+*   **DTO (Data Transfer Object)**: Classi "leggere" (come `SpesaDTO`) usate per trasportare solo i dati necessari tra client e server, ottimizzando la banda.
+*   **Dependency Injection**: Pattern che permette di passare le dipendenze (come il database) alle classi invece di crearle internamente, rendendo il codice testabile e modulare.
+*   **Async/Await**: Programmazione asincrona che permette al server di gestire migliaia di richieste senza bloccarsi mentre aspetta il database.
 
 ---
 
-## 🎤 8. Consigli per l'Esposizione (Come fare colpo)
-1.  **Inizia dal Problema**: "Abbiamo creato Split Mate perché dividere le spese tra amici è sempre un caos".
-2.  **Mostra il Flusso**: Spiega come un utente si registra, crea un gruppo e invita gli amici col codice.
-3.  **Parla della Sicurezza**: Menziona che le password sono criptate con **BCrypt**.
-4.  **Enfatizza l'Algoritmo**: Spiega che non facciamo solo somme, ma ottimizziamo i rimborsi per fare meno transazioni.
-5.  **Tecnologie Moderne**: Di' con orgoglio che avete usato **.NET 10** e **React con Vite**, gli standard più recenti dell'industria.
+## 🎯 Conclusione per l'Espositore
+Per esporre questo progetto come un autore, ricorda di:
+1.  **Giustificare le scelte**: "Abbiamo usato SQLite per la sua portabilità e .NET 10 per le ultime ottimizzazioni di performance".
+2.  **Mostrare la robustezza**: "Il sistema gestisce i conflitti di cancellazione e protegge i dati sensibili".
+3.  **Evidenziare l'innovazione**: "L'algoritmo di bilanciamento non è una semplice sottrazione, ma un'ottimizzazione dei flussi finanziari".
 
 ---
-
-## 🏁 Conclusione
-Split Mate non è solo un esercizio di stile, ma un'applicazione completa, sicura e pronta all'uso. Ogni pezzo del puzzle, dal database SQLite all'interfaccia React, è stato scelto per essere efficace e facile da mantenere.
-
----
-*Guida aggiornata basata sull'analisi del codice sorgente della repository ufficiale.*
+*Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
