@@ -8,7 +8,7 @@ Benvenuti nel manuale definitivo di **Split Mate**. Questo documento non è una 
 
 ### 1.1 Paradigma Full-Stack
 
-Split Mate è implementato seguendo il paradigma **Decoupled Architecture** (Architettura Disaccoppiata). Il sistema è diviso in due entità distinte che comunicano esclusivamente tramite protocolli standard:
+Split Mate adotta un **paradigma architetturale disaccoppiato (Decoupled Architecture)**, suddividendo il sistema in due entità distinte che comunicano esclusivamente tramite protocolli standard:
 
 1.  **Server-Side (Backend)**: Un'applicazione ASP.NET Core che funge da *Provider di Risorse*. Espone endpoint RESTful e gestisce la persistenza dei dati.
 2.  **Client-Side (Frontend)**: Una Single-Page Application (SPA) sviluppata in React. È il *Consumatore di Risorse* che gestisce lo stato dell'interfaccia e l'esperienza utente.
@@ -23,8 +23,7 @@ Il file `Program.cs` è il punto di ingresso e configurazione dell'applicazione 
 *   **`AddSwaggerGen()`**: Abilita la generazione della documentazione API interattiva tramite Swagger/OpenAPI. `CustomSchemaIds` e `ResolveConflictingActions` sono configurazioni per gestire la generazione di ID univoci per gli schemi e risolvere potenziali conflitti tra endpoint con lo stesso percorso ma metodi HTTP diversi.
 *   **`AddCors(...)`**: Configura la politica CORS (Cross-Origin Resource Sharing) denominata "AllowAll". Questa politica è molto permissiva (`AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()`) e consente al frontend, che risiede su un dominio diverso, di effettuare richieste al backend. In un ambiente di produzione, questa politica dovrebbe essere più restrittiva per motivi di sicurezza.
 *   **`context.Database.EnsureCreated()`**: Questo blocco di codice, eseguito all'avvio dell'applicazione, garantisce che il database e le tabelle siano creati se non esistono già. Eventuali errori durante questo processo vengono loggati in `C:\home\startup-log.txt`.
-*   **Middleware**: La pipeline di richiesta include `UseDeveloperExceptionPage()` (per debug), `UseSwagger()` e `UseSwaggerUI()` (per la documentazione API), `UseRouting()`, `UseCors(
-AllowAll")`, `UseAuthorization()` e `MapControllers()`. L'ordine di questi middleware è fondamentale per il corretto funzionamento dell'applicazione.
+*   **Middleware**: La pipeline di richiesta include `UseDeveloperExceptionPage()` (per debug), `UseSwagger()` e `UseSwaggerUI()` (per la documentazione API), `UseRouting()`, `UseCors("AllowAll")`, `UseAuthorization()` e `MapControllers()`. L'ordine di questi middleware è fondamentale per il corretto funzionamento dell'applicazione.
 
 ### 1.2 Flusso dei Dati (Data Flow)
 
@@ -105,6 +104,17 @@ Il controller `AuthController` gestisce le operazioni di autenticazione e regist
 
 L'endpoint `GET api/Auth/exists?email=...` permette di verificare l'esistenza di un'email nel sistema, utile per la validazione in tempo reale nel frontend.
 
+### 3.3 Ciclo di Vita di una Spesa e Logica di Divisione (`SpesaController.cs`)
+
+Il `SpesaController.cs` è responsabile della gestione completa delle spese, dalla creazione alla modifica e cancellazione, inclusa la complessa logica di divisione. Questo controller interagisce strettamente con il `NuovaSpesaDTO` per ricevere i dati dal frontend.
+
+*   **`PostSpesa([FromBody] NuovaSpesaDTO dto)`**: Questo metodo gestisce la creazione di una nuova spesa. Dopo aver validato l'esistenza del gruppo e del pagatore, crea un'istanza di `Spesa` e la persiste. La parte cruciale è la logica di divisione:
+    *   Se `dto.UtentiCoinvoltiIds` è nullo o vuoto, la spesa viene divisa equamente tra *tutti* i membri del gruppo.
+    *   Altrimenti, la spesa viene divisa equamente solo tra gli utenti specificati in `dto.UtentiCoinvoltiIds`.
+    *   Per ogni utente coinvolto, viene creata una `DivisioneSpesa` con la quota calcolata (`Math.Round(nuovaSpesa.Importo / utentiDaAddebitare.Count, 2)`) e persistita nel database. L'uso di `Math.Round` con due cifre decimali è fondamentale per gestire correttamente gli importi monetari.
+*   **`PutSpesa(int id, [FromBody] NuovaSpesaDTO dto)`**: Questo metodo gestisce la modifica di una spesa esistente. Recupera la spesa e le sue divisioni attuali, aggiorna i campi base (`Descrizione`, `Importo`, `ChiPaga_ID`), e poi **ricalcola completamente le divisioni**. Questo implica la rimozione delle `DivisioneSpesa` precedenti (`_context.Divisioni.RemoveRange(spesa.Divisioni)`) e la creazione di nuove basate sul `dto` aggiornato. Questo approccio garantisce che la logica di divisione sia sempre coerente con lo stato attuale della spesa.
+*   **`DeleteSpesa(int id)`**: Gestisce la cancellazione di una spesa. Grazie alla configurazione `DeleteBehavior.Cascade` definita in `ApplicationDbContext.cs` per la relazione tra `Spesa` e `DivisioneSpesa`, la cancellazione di una spesa comporta automaticamente la cancellazione di tutte le sue divisioni associate, mantenendo l'integrità del database.
+
 ---
 
 ## ⚛️ Capitolo 4: Il Frontend (React & Vite)
@@ -179,17 +189,6 @@ Questo approccio dimostra una profonda comprensione dei principi di grafica vett
 *   **Async/Await**: Programmazione asincrona che permette al server di gestire migliaia di richieste senza bloccarsi mentre aspetta il database.
 
 ---
-
-## 🎯 Conclusione per l'Espositore
-
-Per esporre questo progetto come un autore, ricorda di:
-1.  **Giustificare le scelte**: "Abbiamo usato SQLite per la sua portabilità e .NET 10 per le ultime ottimizzazioni di performance".
-2.  **Mostrare la robustezza**: "Il sistema gestisce i conflitti di cancellazione e protegge i dati sensibili".
-3.  **Evidenziare l'innovazione**: "L'algoritmo di bilanciamento non è una semplice sottrazione, ma un'ottimizzazione dei flussi finanziari".
-
----
-*Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
-
 
 ## 🌐 Capitolo 7: Layer di Comunicazione Frontend e DTO Backend
 
@@ -275,16 +274,79 @@ Questi componenti dimostrano l'efficacia dell'approccio basato su componenti di 
 
 ---
 
-## 🎯 Conclusione per l'Espositore (Approfondita)
+## 🎓 Capitolo 10: Simulazione Esame Orale - Domande e Risposte Tecniche
 
-Per esporre questo progetto con una padronanza ancora maggiore, oltre ai punti precedenti, considera di enfatizzare:
+Questa sezione è progettata per prepararti a esporre il progetto "Split Mate" con la sicurezza e la profondità di un vero esperto, simulando le domande che un professore universitario di un corso di web app potrebbe porre.
 
-1.  **Sinergia Frontend-Backend**: Sottolinea come il `api.js` del frontend e i DTO del backend lavorino in tandem per definire un contratto di comunicazione robusto e efficiente, riducendo la complessità e migliorando la sicurezza.
-2.  **Decisioni di Design UI/UX**: Discuti le scelte dietro l'implementazione manuale dei grafici SVG. Spiega i vantaggi in termini di performance (nessuna dipendenza esterna pesante), controllo granulare sull'aspetto grafico e la dimostrazione di competenze tecniche avanzate. Menziona anche come la gestione dello stato locale nei componenti React contribuisca a un'esperienza utente fluida e reattiva.
-3.  **Scalabilità e Manutenibilità**: Argomenta come la modularità del codice (backend suddiviso in controller e modelli, frontend in componenti e moduli API) contribuisca alla scalabilità e alla facilità di manutenzione del progetto. Ad esempio, l'aggiunta di nuove funzionalità o la modifica di quelle esistenti sarebbe facilitata dalla chiara separazione delle responsabilità.
-4.  **Best Practices di Sviluppo**: Evidenzia l'applicazione di best practice come la Dependency Injection nel backend, l'uso di `localStorage` per la persistenza dello stato utente nel frontend, e le strategie di gestione degli errori e di feedback all'utente.
+### 10.1 Domande sull'Architettura e Design
 
-Presentando questi aspetti, dimostrerai non solo di aver compreso il funzionamento del progetto, ma anche di averne analizzato le scelte di design e le implicazioni tecniche a un livello universitario, come richiesto.
+**Domanda 1**: "Qual è il paradigma architetturale adottato per Split Mate e quali sono i vantaggi di questa scelta?"
+
+**Risposta**: "Split Mate adotta un'**Architettura Disaccoppiata (Decoupled Architecture)**, suddividendo il sistema in un backend ASP.NET Core e un frontend React. Il vantaggio principale è la **separazione delle preoccupazioni (separation of concerns)**: il backend si concentra sulla logica di business e sulla persistenza dei dati, esponendo API RESTful, mentre il frontend gestisce l'interfaccia utente e l'esperienza utente. Questo permette lo sviluppo indipendente dei due strati, facilitando la scalabilità, la manutenibilità e la possibilità di sostituire uno strato senza impattare l'altro. Ad esempio, potremmo facilmente sviluppare un'applicazione mobile nativa che consumi le stesse API del backend esistente."
+
+**Domanda 2**: "Perché avete scelto Entity Framework Core e SQLite per la persistenza dei dati? Quali alternative avreste considerato e in quali contesti?"
+
+**Risposta**: "Abbiamo optato per **Entity Framework Core (EF Core)** come ORM e **SQLite** come database per la sua **portabilità e semplicità di setup**, ideale per un progetto dimostrativo o con requisiti di deployment leggeri, come su Azure App Service con un file system persistente. EF Core offre un'astrazione potente per interagire con il database tramite oggetti C#, riducendo la necessità di scrivere SQL manuale e supportando migrazioni. In contesti di produzione con carichi elevati o requisiti di scalabilità orizzontale, avremmo considerato database relazionali più robusti come PostgreSQL o SQL Server, o soluzioni NoSQL come MongoDB per scenari con schemi flessibili, sempre accoppiati a EF Core o a driver specifici per il database scelto."
+
+**Domanda 3**: "Il vostro `Program.cs` mostra una configurazione CORS molto permissiva (`AllowAnyOrigin`). Quali sono le implicazioni di sicurezza di questa scelta e come la modifichereste in produzione?"
+
+**Risposta**: "La configurazione `AllowAnyOrigin()` è stata adottata per facilitare lo sviluppo e il testing, permettendo al frontend di comunicare con il backend da qualsiasi origine. Tuttavia, in un ambiente di produzione, questa è una **grave vulnerabilità di sicurezza**. Un attaccante potrebbe effettuare richieste cross-origin malevole. In produzione, restringeremmo la policy CORS specificando esplicitamente solo i domini autorizzati del frontend, ad esempio `WithOrigins("https://tuofrontend.com")`, e limitando i metodi HTTP e gli header consentiti, per aderire al **principio del privilegio minimo**."
+
+### 10.2 Domande sulla Logica di Business e Backend
+
+**Domanda 4**: "Descrivete l'algoritmo di bilanciamento delle spese implementato nel `GruppoController`. Qual è la sua complessità computazionale e perché è stata scelta questa strategia?"
+
+**Risposta**: "L'algoritmo di bilanciamento mira a minimizzare il numero di transazioni necessarie per saldare i debiti all'interno di un gruppo. Si articola in tre fasi: **Aggregazione**, dove si calcolano i saldi netti di ogni utente; **Classificazione**, dove gli utenti vengono divisi in debitori e creditori e ordinati per entità del saldo; e **Matching (Greedy Algorithm)**, dove il maggior debitore viene accoppiato con il maggior creditore, risolvendo il debito parzialmente o totalmente e aggiornando i saldi. Questo processo si ripete finché tutti i saldi non sono azzerati. La complessità è dominata dalle operazioni di ordinamento e dal ciclo di matching, che in un caso peggiore potrebbe essere `O(N log N)` o `O(N^2)` a seconda dell'implementazione precisa del matching, dove N è il numero di utenti. È stata scelta una strategia greedy per la sua relativa semplicità implementativa e per la sua efficacia nel ridurre il numero di transazioni, che è un obiettivo primario per la chiarezza finanziaria."
+
+**Domanda 5**: "Il sistema implementa un 'auto-provisioning' degli utenti. Spiegate come funziona e quali sono i pro e i contro di questo approccio per la gestione degli account."
+
+**Risposta**: "L'auto-provisioning, gestito nel `AuthController`, crea automaticamente un nuovo account utente se un'email non registrata tenta il login. Il nome utente viene derivato dall'email e la password viene hashata con BCrypt. Il principale **pro** è una **riduzione dell'attrito per l'utente (user friction)**, semplificando l'onboarding e incoraggiando l'adozione. Il **contro** è una potenziale **mancanza di controllo** sulla creazione degli account e una minore sicurezza percepita, poiché non c'è un processo di registrazione esplicito con conferma email. In un'applicazione con requisiti di sicurezza più stringenti, si preferirebbe un flusso di registrazione tradizionale con verifica dell'email per prevenire abusi e garantire l'identità dell'utente."
+
+**Domanda 6**: "Descrivete il ciclo di vita di una spesa, dalla sua creazione nel frontend alla persistenza e alla gestione delle divisioni nel backend."
+
+**Risposta**: "Il ciclo inizia nel frontend, tipicamente tramite il componente `ModalNuovaSpesa.jsx`, dove l'utente inserisce i dettagli (descrizione, importo, pagatore, utenti coinvolti). Questi dati vengono incapsulati in un oggetto e inviati al backend tramite la funzione `creaSpesa` in `api.js`. Nel backend, il `SpesaController.cs` riceve questi dati come `NuovaSpesaDTO`. Il controller valida il DTO, crea un'istanza del modello `Spesa`, la persiste nel database e, crucialmente, calcola le `DivisioneSpesa`. Se non specificato, la spesa viene divisa equamente tra tutti i membri del gruppo; altrimenti, tra gli utenti selezionati. Per ogni utente coinvolto, viene creata una `DivisioneSpesa` con la quota calcolata (`Math.Round(importo / count, 2)`), e queste divisioni vengono anch'esse persistite. Le relazioni tra `Spesa` e `DivisioneSpesa` sono gestite da Entity Framework Core, con `DeleteBehavior.Cascade` per le divisioni, assicurando che vengano eliminate automaticamente con la spesa principale."
+
+### 10.3 Domande sul Frontend e User Experience
+
+**Domanda 7**: "Come viene gestita la persistenza dello stato dell'utente nel frontend e quali sono le implicazioni per l'esperienza utente?"
+
+**Risposta**: "Lo stato dell'utente (`utente`) viene persistito nel `localStorage` del browser, come visibile in `App.jsx`. Questo significa che, anche dopo aver chiuso e riaperto il browser o aver ricaricato la pagina, l'utente rimane autenticato. L'implicazione principale è un'**esperienza utente migliorata (User Retention)**, poiché l'utente non deve effettuare il login ad ogni visita. Tuttavia, è fondamentale che il `localStorage` non contenga informazioni sensibili non hashate o token di autenticazione a lungo termine senza adeguate misure di sicurezza, poiché è vulnerabile ad attacchi XSS. Per token JWT, ad esempio, si preferirebbe `HttpOnly cookies`."
+
+**Domanda 8**: "Perché avete scelto di implementare i grafici (torta e istogramma) manualmente con SVG anziché utilizzare una libreria di charting esistente? Quali sono i pro e i contro di questa decisione?"
+
+**Risposta**: "La decisione di implementare i grafici `GraficoTorta.jsx` e `GraficoIstogramma.jsx` manualmente con **SVG (Scalable Vector Graphics)** è stata dettata dalla volontà di avere il **controllo granulare** sull'aspetto e il comportamento dei grafici, oltre a **ridurre le dipendenze esterne** e il peso del bundle JavaScript. I **pro** includono: **leggerezza** dell'applicazione, **ottimizzazione delle performance** (nessun overhead di librerie complesse), **personalizzazione completa** del design e una dimostrazione di **competenze tecniche avanzate** nella manipolazione di SVG e trigonometria. I **contro** sono un **tempo di sviluppo maggiore** per funzionalità complesse, la necessità di una profonda conoscenza di SVG e matematica, e una potenziale **minore robustezza** rispetto a librerie mature che gestiscono molti edge case e interattività avanzate. Per questo progetto, i benefici hanno superato i costi."
+
+**Domanda 9**: "Nel `DettaglioGruppo.jsx`, un membro non può essere rimosso se ha delle spese registrate. Come si riflette questa logica di business a livello di database e quali sono i vantaggi?"
+
+**Risposta**: "Questa logica di business, implementata nel frontend tramite la verifica `eCoinvolto` e nel backend tramite `DeleteBehavior.Restrict` nelle relazioni di Entity Framework Core, garantisce l'**integrità referenziale** del database. Non è possibile eliminare un utente (o un gruppo) se esistono record correlati (spese o divisioni) che fanno riferimento ad esso. Il vantaggio principale è la **prevenzione della corruzione dei dati**: si evita di avere 'record orfani' o dati inconsistenti. Questo assicura che il database rifletta sempre uno stato valido e coerente delle informazioni finanziarie, fondamentale per un'applicazione di gestione spese."
+
+### 10.4 Domande su Best Practices e Pattern di Sviluppo
+
+**Domanda 10**: "Spiegate il concetto di Dependency Injection (DI) e come viene applicato nel backend di Split Mate. Quali benefici apporta?"
+
+**Risposta**: "La **Dependency Injection (DI)** è un pattern di design che permette di invertire il controllo sulla creazione e gestione delle dipendenze. Invece di creare direttamente le dipendenze all'interno di una classe, queste vengono 'iniettate' dall'esterno. Nel backend ASP.NET Core di Split Mate, la DI è ampiamente utilizzata. Ad esempio, i controller come `GruppoController` o `AuthController` ricevono un'istanza di `ApplicationDbContext` tramite il loro costruttore. Il framework si occupa di creare e fornire questa istanza. I benefici sono molteplici: **testabilità** (è facile iniettare mock o stub per i test unitari), **modularità** (le classi sono meno accoppiate e più riutilizzabili), **manutenibilità** (le modifiche a una dipendenza non richiedono modifiche a tutte le classi che la usano) e **scalabilità** (facilita la gestione del ciclo di vita degli oggetti e l'uso di servizi a livello di applicazione)."
+
+**Domanda 11**: "Qual è il ruolo dei DTO (Data Transfer Objects) nel vostro progetto e perché sono preferibili all'esposizione diretta dei modelli di dominio nelle API?"
+
+**Risposta**: "I **DTO (Data Transfer Objects)**, come `NuovaSpesaDTO`, sono oggetti semplici utilizzati per trasferire dati tra il frontend e il backend. Il loro ruolo è quello di definire un **contratto di comunicazione** specifico per ogni operazione API, disaccoppiato dai modelli di dominio interni del database. Sono preferibili all'esposizione diretta dei modelli di dominio per diverse ragioni: **sicurezza** (si espongono solo i campi necessari, prevenendo l'over-posting e l'information leakage), **performance** (si trasferiscono solo i dati essenziali, riducendo il payload di rete), **flessibilità** (il modello di dominio può evolvere indipendentemente dal contratto API) e **separazione delle preoccupazioni** (il frontend non ha bisogno di conoscere la struttura interna completa del database)."
+
+**Domanda 12**: "Come gestite la programmazione asincrona nel backend e quali sono i vantaggi di `async/await` in un'applicazione web?"
+
+**Risposta**: "Nel backend ASP.NET Core, la programmazione asincrona è gestita tramite le parole chiave `async` e `await` di C#. Quasi tutte le operazioni I/O, come l'interazione con il database (`_context.SaveChangesAsync()`, `_context.Utenti.FirstOrDefaultAsync()`), sono implementate in modo asincrona. Il vantaggio principale in un'applicazione web è la **scalabilità**. Quando una richiesta I/O viene avviata, il thread del server che l'ha iniziata può essere rilasciato per servire altre richieste, invece di rimanere bloccato in attesa del completamento dell'operazione. Questo permette al server di gestire un numero molto maggiore di richieste concorrenti con un numero limitato di thread, migliorando l'utilizzo delle risorse e la reattività complessiva dell'applicazione, specialmente sotto carico elevato."
+
+---
+
+## 🎯 Conclusione Finale per l'Espositore
+
+Con questa guida completa, hai ora a disposizione tutti gli strumenti concettuali e tecnici per presentare il progetto "Split Mate" a un livello accademico elevato. Ricorda di:
+
+*   **Articolare le scelte di design**: Ogni decisione tecnica (architettura, database, framework, implementazione grafici) deve essere giustificata con pro e contro.
+*   **Dimostrare comprensione del codice**: Non limitarti a descrivere cosa fa il codice, ma spiega *perché* è stato scritto in quel modo e quali pattern o principi di design applica.
+*   **Enfatizzare la robustezza e la sicurezza**: Sottolinea come il progetto gestisca l'integrità dei dati, l'autenticazione e le vulnerabilità comuni (CORS, hashing password).
+*   **Mostrare la visione d'insieme**: Collega le diverse parti del progetto (frontend, backend, database) in un flusso coerente, evidenziando come interagiscono per raggiungere gli obiettivi funzionali.
+*   **Prepararti alle domande**: Utilizza la sezione di simulazione per anticipare le obiezioni e formulare risposte chiare e concise, dimostrando non solo conoscenza ma anche capacità critica.
+
+Buona fortuna per la tua esposizione!
 
 ---
 *Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
