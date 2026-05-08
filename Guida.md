@@ -189,3 +189,102 @@ Per esporre questo progetto come un autore, ricorda di:
 
 ---
 *Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
+
+
+## 🌐 Capitolo 7: Layer di Comunicazione Frontend e DTO Backend
+
+### 7.1 `api.js`: Il Modulo di Interazione con il Backend
+
+Il file `api.js` nel frontend funge da strato di astrazione per tutte le chiamate HTTP verso il backend. Questo approccio centralizza la logica di comunicazione, rendendo il codice più modulare, manutenibile e leggibile. Ogni funzione esportata in `api.js` corrisponde a un'operazione specifica sull'API RESTful del backend.
+
+Esempi di funzioni e la loro mappatura agli endpoint del backend:
+
+*   **`login(email, password)`**: Effettua una richiesta `POST` a `${API_BASE_URL}/Auth/login` per l'autenticazione dell'utente.
+*   **`getGruppiUtente(utenteId)`**: Effettua una richiesta `GET` a `${API_BASE_URL}/Gruppo/utente/${utenteId}` per recuperare i gruppi a cui un utente appartiene.
+*   **`creaSpesa(dati)`**: Effettua una richiesta `POST` a `${API_BASE_URL}/Spesa` per la creazione di una nuova spesa. Il corpo della richiesta è un oggetto JSON che rispecchia il `NuovaSpesaDTO` del backend.
+*   **`saldaDebito(riepilogoId)`**: Effettua una richiesta `PUT` a `${API_BASE_URL}/Riepilogo/${riepilogoId}/Saldato` per marcare un debito come saldato.
+
+Questo modulo incapsula i dettagli delle chiamate `fetch`, inclusi i metodi HTTP, gli header (`Content-Type: application/json`) e la serializzazione del corpo della richiesta (`JSON.stringify`). Ciò permette ai componenti React di interagire con il backend tramite funzioni semplici e chiare, senza doversi preoccupare dei dettagli implementativi delle richieste HTTP.
+
+### 7.2 `NuovaSpesaDTO.cs`: Data Transfer Object per la Creazione di Spese
+
+Nel contesto di un'architettura a strati, i **Data Transfer Object (DTO)** sono oggetti utilizzati per trasportare dati tra i processi. Nel progetto `gestore-spese`, `NuovaSpesaDTO.cs` è un esempio di DTO utilizzato per la creazione di nuove spese. La sua struttura è ottimizzata per ricevere i dati dal frontend in un formato specifico, disaccoppiato dal modello di dominio `Spesa` completo.
+
+```csharp
+public class NuovaSpesaDTO
+{
+    public int Gruppo_ID { get; set; }
+    public int ChiPaga_ID { get; set; }
+
+    [Required]
+    [Range(0.01, double.MaxValue)]
+    public decimal Importo { get; set; }
+
+    public string? Descrizione { get; set; }
+
+    public List<int> UtentiCoinvoltiIds { get; set; } = new List<int>();
+}
+```
+
+Caratteristiche principali:
+
+*   **Disaccoppiamento**: Il DTO non espone tutte le proprietà del modello di dominio `Spesa` (ad esempio, `Id` della spesa, `Divisioni`). Questo riduce la superficie di attacco e previene l'over-posting di dati non desiderati.
+*   **Validazione**: Le annotazioni `[Required]` e `[Range(0.01, double.MaxValue)]` applicano regole di validazione a livello di modello, garantendo che l'importo sia sempre presente e positivo. Queste validazioni vengono eseguite automaticamente dal framework ASP.NET Core prima che i dati raggiungano la logica di business del controller.
+*   **Semplicità**: Il DTO fornisce un contratto chiaro e semplice per la creazione di una spesa, includendo l'ID del gruppo, l'ID del pagatore, l'importo, una descrizione opzionale e una lista di ID degli utenti coinvolti nella divisione della spesa.
+
+L'uso di DTO migliora la sicurezza, la manutenibilità e la chiarezza del codice, separando la rappresentazione dei dati per il trasferimento dalla rappresentazione dei dati nel dominio dell'applicazione.
+
+## 📊 Capitolo 8: Visualizzazioni Dati Avanzate nel Frontend
+
+Oltre al `GraficoTorta.jsx` analizzato precedentemente, il progetto include `GraficoIstogramma.jsx`, un altro esempio di visualizzazione dati creata manualmente con SVG, dimostrando una profonda padronanza delle tecnologie web di base per la rappresentazione grafica.
+
+### 8.1 `GraficoIstogramma.jsx`: Implementazione di un Istogramma con SVG
+
+Il componente `GraficoIstogramma.jsx` visualizza l'ammontare totale delle spese per ciascun membro del gruppo sotto forma di istogramma. Anche in questo caso, la scelta di utilizzare SVG puro anziché librerie di terze parti è una decisione di design che privilegia il controllo fine, la leggerezza e l'ottimizzazione delle performance.
+
+*   **Calcolo dei Totali e Valore Massimo**: Similmente al grafico a torta, il componente calcola il `totale` delle spese per ogni membro e determina il `maxValore` per scalare correttamente le barre dell'istogramma.
+*   **Dimensioni SVG e Padding**: Vengono definite le dimensioni del canvas SVG (`svgW`, `svgH`) e i margini (`paddingLeft`, `paddingRight`, `paddingTop`, `paddingBottom`) per garantire che il grafico sia ben proporzionato e leggibile. Vengono calcolate anche le dimensioni effettive dell'area del grafico (`chartW`, `chartH`).
+*   **Linee della Griglia**: Vengono generate dinamicamente delle linee orizzontali della griglia (`gridLines`) con etichette di valore per facilitare la lettura dei dati. Queste sono create utilizzando elementi `<line>` e `<text>` SVG.
+*   **Barre dell'Istogramma**: Per ogni membro, viene calcolata l'altezza della barra (`barH`) in proporzione al `maxValore`. La posizione (`x`, `y`) e la larghezza (`barWidth`) di ciascuna barra sono determinate per distribuirle uniformemente all'interno dell'area del grafico. Ogni barra è un elemento `<rect>` SVG con angoli arrotondati (`rx`, `ry`) e un colore assegnato da un array predefinito.
+*   **Etichette**: Sopra ogni barra viene visualizzato l'importo totale (`€{m.totale.toFixed(0)}`) e sotto la barra il nome del membro (`m.nome`), con una logica per troncare i nomi lunghi e aggiungere i puntini di sospensione (`...`).
+
+Questo componente, insieme al `GraficoTorta.jsx`, evidenzia una competenza avanzata nella manipolazione di SVG per la visualizzazione dati, un aspetto che può essere particolarmente apprezzato in un contesto accademico per la sua efficienza e il controllo granulare sull'output grafico. La scelta di implementare queste visualizzazioni da zero, senza l'ausilio di librerie complesse, dimostra una comprensione profonda dei principi di rendering grafico e un'attenzione alla leggerezza dell'applicazione frontend.
+
+---
+
+## 📚 Capitolo 9: Approfondimenti sulla Gestione dello Stato e Interazione Utente
+
+### 9.1 `DettaglioGruppo.jsx`: Interazione Complessa e Gestione dello Stato Locale
+
+Il componente `DettaglioGruppo.jsx` è un esempio eccellente di come React gestisca stati complessi e interazioni utente. Oltre a quanto già menzionato, è importante sottolineare:
+
+*   **Stato Locale Dettagliato**: Il componente mantiene diversi stati locali (`gruppo`, `loading`, `nuovoMembroNome`, `isAggiungendo`, `isModalSpesaOpen`, `spesaInModifica`) per gestire l'interfaccia utente e le sue interazioni. Questo approccio garantisce che le modifiche all'interfaccia siano reattive e che l'utente riceva feedback immediato.
+*   **Gestione Modali**: L'apertura e chiusura delle modali (`ModalNuovaSpesa`, `ModalModificaSpesa`) sono controllate tramite stati booleani (`isModalSpesaOpen`, `spesaInModifica`). Quando una modale viene aperta, lo stato `spesaInModifica` può essere popolato con i dati della spesa da modificare, permettendo alla modale di pre-compilare i campi.
+*   **Feedback Utente**: L'uso di `alert()` per le conferme di eliminazione (`handleEliminaGruppo`, `handleEliminaSpesa`, `handleEliminaAmico`) e per i messaggi di errore fornisce un feedback diretto all'utente. Sebbene per applicazioni più complesse si preferirebbero soluzioni UI più sofisticate (es. toast notifications), per questo progetto è un metodo efficace e semplice.
+*   **Ottimizzazione del Rendering**: L'uso di `useEffect` con `gruppoId` come dipendenza assicura che i dati del gruppo vengano ricaricati solo quando l'ID del gruppo cambia, evitando rendering non necessari e ottimizzando le chiamate API.
+
+### 9.2 `ModalNuovaSpesa.jsx` e `ModalModificaSpesa.jsx`: Componenti Modali Riutilizzabili
+
+Questi componenti modali sono esempi di come si possano creare interfacce utente complesse e riutilizzabili in React. Essi incapsulano la logica per la creazione e modifica delle spese, interagendo con il backend tramite le funzioni definite in `api.js`.
+
+*   **Form Controllo**: Entrambe le modali utilizzano stati locali per gestire i campi del form (descrizione, importo, pagatore, utenti coinvolti). Questo permette una validazione in tempo reale e un controllo preciso sull'input dell'utente.
+*   **Logica di Divisione**: La `ModalNuovaSpesa` include una logica per la divisione della spesa: può essere divisa con tutti i membri del gruppo o solo con un sottoinsieme selezionato. Questo si traduce nella costruzione dell'array `UtentiCoinvoltiIds` che viene inviato al backend tramite il `NuovaSpesaDTO`.
+*   **Interazione con l'API**: Le modali chiamano le funzioni `creaSpesa` o `modificaSpesa` da `api.js` per persistere i dati. Dopo un'operazione riuscita, chiamano una callback (`onSpesaAggiunta` o `onSpesaModificata`) fornita dal componente padre (`DettaglioGruppo.jsx`) per aggiornare la visualizzazione dei dati.
+
+Questi componenti dimostrano l'efficacia dell'approccio basato su componenti di React per costruire interfacce utente interattive e complesse, mantenendo al contempo una chiara separazione delle responsabilità.
+
+---
+
+## 🎯 Conclusione per l'Espositore (Approfondita)
+
+Per esporre questo progetto con una padronanza ancora maggiore, oltre ai punti precedenti, considera di enfatizzare:
+
+1.  **Sinergia Frontend-Backend**: Sottolinea come il `api.js` del frontend e i DTO del backend lavorino in tandem per definire un contratto di comunicazione robusto e efficiente, riducendo la complessità e migliorando la sicurezza.
+2.  **Decisioni di Design UI/UX**: Discuti le scelte dietro l'implementazione manuale dei grafici SVG. Spiega i vantaggi in termini di performance (nessuna dipendenza esterna pesante), controllo granulare sull'aspetto grafico e la dimostrazione di competenze tecniche avanzate. Menziona anche come la gestione dello stato locale nei componenti React contribuisca a un'esperienza utente fluida e reattiva.
+3.  **Scalabilità e Manutenibilità**: Argomenta come la modularità del codice (backend suddiviso in controller e modelli, frontend in componenti e moduli API) contribuisca alla scalabilità e alla facilità di manutenzione del progetto. Ad esempio, l'aggiunta di nuove funzionalità o la modifica di quelle esistenti sarebbe facilitata dalla chiara separazione delle responsabilità.
+4.  **Best Practices di Sviluppo**: Evidenzia l'applicazione di best practice come la Dependency Injection nel backend, l'uso di `localStorage` per la persistenza dello stato utente nel frontend, e le strategie di gestione degli errori e di feedback all'utente.
+
+Presentando questi aspetti, dimostrerai non solo di aver compreso il funzionamento del progetto, ma anche di averne analizzato le scelte di design e le implicazioni tecniche a un livello universitario, come richiesto.
+
+---
+*Questo manuale è una risorsa viva, basata sull'analisi riga per riga del codice sorgente di Split Mate.*
