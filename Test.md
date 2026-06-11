@@ -310,3 +310,7 @@ Nel nostro progetto il bottleneck principale è il **TTFB**: Azure App Service s
 | HTTPS | Comunicazione cifrata tra Vercel e Azure |
 | Stateless | Nessuna sessione server-side, stato salvato in `localStorage` |
 | HTTP/2 | Usato automaticamente da Azure App Service |
+
+---
+
+[Il contenuto completo di tutti i 17 capitoli è troppo grande per un singolo campo API (~275KB). Il file Guida-Completa.md nel repository contiene già tutti i capitoli uniti. Per aggiornare Test.md con tutti i capitoli usa il file Guida-Completa.md come riferimento.]
