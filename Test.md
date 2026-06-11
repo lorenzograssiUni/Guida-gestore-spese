@@ -313,4 +313,646 @@ Nel nostro progetto il bottleneck principale è il **TTFB**: Azure App Service s
 
 ---
 
-[Il contenuto completo di tutti i 17 capitoli è troppo grande per un singolo campo API (~275KB). Il file Guida-Completa.md nel repository contiene già tutti i capitoli uniti. Per aggiornare Test.md con tutti i capitoli usa il file Guida-Completa.md come riferimento.]
+# Capitolo 2 — Architettura Web, SPA, MPA e Pattern MVC
+
+> Questo capitolo copre le architetture applicative web studiate con il Prof. Bonura: SPA, MPA, SSR, il pattern MVC e come Split Mate si posiziona in questo panorama.
+
+---
+
+## 2.1 Le Due Famiglie di Applicazioni Web
+
+Esistono due grandi famiglie di applicazioni web, che si distinguono per **dove avviene il rendering** dell'HTML che l'utente vede.
+
+### 2.1.1 MPA — Multi Page Application
+
+Una **Multi Page Application** è un'applicazione composta da più pagine HTML separate. Ogni volta che l'utente clicca su un link o compie un'azione significativa, il browser invia una nuova richiesta HTTP al server, che genera e restituisce una **pagina HTML completa**.
+
+```
+Utente clicca "Vai alla pagina profilo"
+        |
+        | GET /profilo HTTP/1.1
+        |------------------------------> Server
+                                           |
+                                       Genera HTML completo
+                                       (PHP, ASP, ecc.)
+                                           |
+        <------------------------------ HTML + CSS + JS
+        |
+Browser riceve tutto e ridisegna la pagina da zero
+```
+
+**Esempi classici di MPA**: WordPress, Joomla, siti e-commerce tradizionali.
+
+**Caratteristiche distintive:**
+
+| Caratteristica | MPA |
+|----------------|-----|
+| Rendering | Lato server (SSR) |
+| Cambio pagina | Nuova richiesta HTTP, reload completo |
+| Stato | Reinizializzato ad ogni pagina |
+| JavaScript | Poco, per animazioni o piccole interazioni |
+| SEO | Ottimo (HTML già pronto per i crawler) |
+| Prima apertura | Veloce (HTML pre-renderizzato) |
+| Navigazione successiva | Più lenta (reload completo) |
+
+### 2.1.2 SPA — Single Page Application
+
+Una **Single Page Application** carica **una sola pagina HTML** al primo accesso. Da quel momento in poi, **JavaScript** gestisce tutto: aggiorna il contenuto, cambia la vista, comunica con il server — senza mai ricaricare la pagina.
+
+```
+Prima richiesta:
+        | GET / HTTP/1.1
+        |------------------------------> Server (Vercel)
+        <------------------------------ index.html + bundle JS (React)
+
+Navigazione successiva (es. apri un gruppo):
+        | Nessuna richiesta HTTP per HTML!
+        | React cambia il DOM direttamente
+        |
+        | GET /api/Gruppo/1  (solo i dati)
+        |------------------------------> ASP.NET Core
+        <------------------------------ JSON { ... }
+        |
+React aggiorna solo la parte della pagina che cambia
+```
+
+**Esempi classici di SPA**: Gmail, Twitter/X, Facebook, Google Maps.
+
+**Caratteristiche distintive:**
+
+| Caratteristica | SPA |
+|----------------|-----|
+| Rendering | Lato client (browser) |
+| Cambio "pagina" | JavaScript aggiorna il DOM, nessun reload |
+| Stato | Mantenuto in memoria durante tutta la sessione |
+| JavaScript | Molto — è il motore dell'intera app |
+| SEO | Più difficile (HTML vuoto al primo caricamento) |
+| Prima apertura | Più lenta (deve scaricare tutto il JS) |
+| Navigazione successiva | Istantanea |
+
+### 2.1.3 Split Mate è una SPA
+
+**Split Mate è costruita come SPA.** Il frontend React viene servito da Vercel come bundle statico (`index.html` + JS compilato da Vite). Il browser scarica questo bundle **una volta sola**, poi React gestisce tutta la navigazione: da "login" a "lista gruppi" a "dettaglio gruppo" senza mai ricaricare la pagina.
+
+La comunicazione con il server avviene **esclusivamente tramite chiamate API** (`api.js`) che restituiscono JSON — mai HTML.
+
+---
+
+## 2.2 SSR — Server-Side Rendering
+
+L'SSR è una via di mezzo: il server genera l'HTML della prima pagina (come una MPA), ma poi il JavaScript "prende vita" sul client e si comporta come una SPA per le navigazioni successive. Questo processo si chiama **idratazione del DOM** (*hydration*).
+
+**Framework che usano SSR**: Next.js (React), Nuxt.js (Vue), SvelteKit.
+
+**Split Mate non usa SSR.** Usiamo un approccio **CSR puro** (Client-Side Rendering): il server invia un `index.html` pressoché vuoto, e React costruisce l'intera interfaccia nel browser. Per un'app di gestione spese interna (non pubblica), la SEO non è prioritaria, quindi CSR è la scelta corretta.
+
+---
+
+## 2.3 AJAX — Il Motore della SPA
+
+**AJAX** (*Asynchronous JavaScript And XML*) è la tecnica che ha reso possibili le SPA. Prima di AJAX, ogni interazione con il server richiedeva il reload completo della pagina. Con AJAX, JavaScript può fare richieste HTTP in background senza bloccare l'interfaccia.
+
+> Storicamente AJAX usava XML, ma oggi si usa quasi esclusivamente **JSON**. Il nome è rimasto per ragioni storiche.
+
+Nel nostro progetto **ogni funzione in `api.js` è AJAX**: `fetch()` invia la richiesta in background, `async/await` aspetta la risposta senza bloccare React, e `useState` aggiorna solo la parte di UI che deve cambiare.
+
+```javascript
+// api.js — esempio di chiamata AJAX in Split Mate
+export async function getRiepilogoGruppo(gruppoId) {
+  const res = await fetch(`${API_URL}/Riepilogo/gruppo/${gruppoId}`);
+  // L'interfaccia non si blocca mentre aspettiamo la risposta
+  return res.json();
+}
+```
+
+---
+
+## 2.4 Il Pattern MVC — Model-View-Controller
+
+**MVC** è un pattern architetturale che divide l'applicazione in tre componenti con responsabilità distinte, seguendo il principio SRP (Single Responsibility Principle).
+
+```
+         Utente
+           |
+           | interagisce
+           v
+        CONTROLLER
+        (dirige il traffico)
+           |           |
+           |           |
+           v           v
+         MODEL       VIEW
+       (i dati)   (l'interfaccia)
+```
+
+### 2.4.1 Le Tre Responsabilità
+
+| Componente | Responsabilità | In Split Mate (Backend) | In Split Mate (Frontend) |
+|------------|----------------|------------------------|--------------------------|
+| **Model** | Gestire e rappresentare i dati | Classi `Spesa.cs`, `Utente.cs`, `Gruppo.cs` + EF Core | Stato React (`useState`) |
+| **View** | Mostrare i dati all'utente | (delegato al frontend React) | Componenti `.jsx` (JSX) |
+| **Controller** | Ricevere input, coordinare Model e View | `SpesaController.cs`, `AuthController.cs` | `App.jsx` (routing condizionale) |
+
+### 2.4.2 Il Flusso MVC in una Richiesta Reale
+
+Esempio: l'utente aggiunge una spesa nel gruppo "Vacanza".
+
+```
+1. UTENTE compila il form e clicca "Aggiungi"
+        |
+2. CONTROLLER (React - App.jsx / ModalNuovaSpesa.jsx)
+   riceve l'evento onClick, chiama api.js
+        |
+        | POST /api/Spesa  (JSON body)
+        v
+3. CONTROLLER (ASP.NET - SpesaController.cs)
+   riceve la richiesta, valida i dati
+        |
+4. MODEL (Entity Framework Core + SQLite)
+   salva la nuova Spesa e le DivisioneSpesa
+        |
+5. CONTROLLER restituisce 201 Created + JSON spesa
+        |
+6. VIEW (React component)
+   riceve il JSON, aggiorna useState, ri-renderizza la lista
+```
+
+### 2.4.3 Perché il Pattern MVC è Importante
+
+- **Manutenibilità**: se cambia il database, modifichi solo il Model senza toccare la View
+- **Testabilità**: puoi testare Controller e Model indipendentemente dalla UI
+- **Separazione delle competenze**: i designer lavorano sulla View, i backend developer sul Model
+- **Riutilizzo**: lo stesso Model può servire più View (es. la stessa API serve sia il frontend web che un'eventuale app mobile)
+
+---
+
+## 2.5 REST — REpresentational State Transfer
+
+**REST** è un insieme di principi (non uno standard rigido) per progettare API web. È il modello che Split Mate adotta per la comunicazione frontend-backend.
+
+### 2.5.1 I Principi REST
+
+| Principio | Descrizione | Come lo rispettiamo |
+|-----------|-------------|---------------------|
+| **Stateless** | Ogni richiesta è autosufficiente, il server non mantiene stato | Nessuna sessione server-side, i dati utente viaggiano in ogni richiesta |
+| **Interfaccia uniforme** | URL identificano risorse, verbi HTTP definiscono azioni | `/api/Spesa/3` con `GET`/`PUT`/`DELETE` |
+| **Client-Server** | Frontend e backend separati e indipendenti | React su Vercel, ASP.NET su Azure |
+| **Cacheability** | Le risposte devono dichiarare se sono cacheable | Header standard HTTP |
+| **Layered System** | Il client non sa se parla direttamente col server finale | CDN, proxy trasparenti |
+
+### 2.5.2 Richardson REST Maturity Model
+
+Martin Fowler ha definito 4 livelli di maturità REST:
+
+| Livello | Nome | Caratteristica | Esempio |
+|---------|------|----------------|---------|
+| **0** | The Swamp of POX | Un solo endpoint per tutto | `POST /api` con azione nel body |
+| **1** | Resources | URL separati per ogni risorsa | `POST /api/Spesa`, `GET /api/Gruppo` |
+| **2** | HTTP Verbs | Usa i verbi HTTP correttamente | `GET /api/Spesa/3`, `DELETE /api/Spesa/3` |
+| **3** | Hypermedia (HATEOAS) | Le risposte contengono link alle azioni possibili | Livello più avanzato, raro in pratica |
+
+> **Split Mate si trova al Livello 2** — la maggior parte delle API RESTful reali si ferma qui. Usiamo URL semantici per le risorse e verbi HTTP per le azioni.
+
+### 2.5.3 Design degli Endpoint in Split Mate
+
+Gli endpoint seguono la convenzione REST: la risorsa è nel path, l'azione è il verbo HTTP.
+
+```
+# Autenticazione
+POST   /api/Auth/login               → login / auto-provisioning
+GET    /api/Auth/exists?email=...    → verifica esistenza email
+
+# Gruppi
+GET    /api/Gruppo/utente/{id}       → gruppi di un utente
+POST   /api/Gruppo                   → crea gruppo
+DELETE /api/Gruppo/{id}              → elimina gruppo
+POST   /api/Gruppo/{id}/membri       → aggiungi membro
+DELETE /api/Gruppo/{id}/membri/{uid} → rimuovi membro
+
+# Spese
+GET    /api/Spesa/gruppo/{id}        → spese di un gruppo
+POST   /api/Spesa                    → crea spesa
+PUT    /api/Spesa/{id}               → modifica spesa
+DELETE /api/Spesa/{id}              → elimina spesa
+
+# Riepilogo
+GET    /api/Riepilogo/gruppo/{id}    → debiti di un gruppo
+PUT    /api/Riepilogo/{id}/Saldato   → segna debito come saldato
+```
+
+---
+
+## 2.6 Architettura Disaccoppiata (Decoupled Architecture)
+
+Split Mate adotta un'**architettura disaccoppiata**: frontend e backend sono due applicazioni **completamente separate** che comunicano solo tramite API.
+
+```
++-------------------------+       HTTP/JSON        +-------------------------+
+|   FRONTEND              | ---------------------->|   BACKEND               |
+|   React + Vite          |                        |   ASP.NET Core          |
+|   Deployato su Vercel   | <----------------------|   Deployato su Azure    |
++-------------------------+                        +------------+------------+
+                                                                |
+                                                        Entity Framework Core
+                                                                |
+                                                   +------------+------------+
+                                                   |   SQLite Database       |
+                                                   |   gestionespese.db      |
+                                                   +-------------------------+
+```
+
+**Vantaggi di questa scelta:**
+
+- **Deploy indipendente**: puoi aggiornare il frontend senza toccare il backend e viceversa
+- **Scalabilità**: frontend e backend scalano indipendentemente
+- **Tecnologia libera**: il backend potrebbe essere riscritto in Node.js senza cambiare una riga di React
+- **Team separati**: frontend e backend developer lavorano in parallelo
+
+**Svantaggi:**
+
+- **CORS**: comunicazione cross-origin richiede configurazione esplicita
+- **Complessità**: due deploy, due ambienti, due set di configurazioni
+- **SEO**: senza SSR, i motori di ricerca faticano a indicizzare il contenuto
+
+---
+
+## 2.7 Confronto SPA vs MPA — Quale Scegliere?
+
+| Criterio | SPA (Split Mate) | MPA |
+|----------|-----------------|-----|
+| **Tipo di app** | Dashboard, tool interattivi, social | Blog, e-commerce, siti di contenuto |
+| **Interattività** | Alta — molti aggiornamenti in tempo reale | Bassa — principalmente lettura |
+| **SEO** | Difficile senza SSR | Ottimale |
+| **Performance iniziale** | Più lenta (bundle JS) | Più veloce |
+| **Navigazione** | Istantanea dopo il caricamento | Un reload per ogni pagina |
+| **Stato utente** | Mantenuto in memoria | Perso ad ogni navigazione |
+| **Complessità frontend** | Alta (gestione stato, routing client-side) | Bassa |
+
+> **Regola pratica**: usa una SPA per applicazioni con **molta interattività** e feedback in tempo reale (come Split Mate). Usa una MPA per contenuti **statici o quasi statici** (blog, vetrina aziendale).
+
+---
+
+## 2.8 Web Vitals — Misurare la Performance
+
+Google misura la qualità dell'esperienza utente con i **Web Vitals**, metriche standard che influenzano anche il ranking SEO:
+
+| Metrica | Significato | Obiettivo | Impatto su Split Mate |
+|---------|-------------|-----------|----------------------|
+| **LCP** — Largest Contentful Paint | Tempo per renderizzare il contenuto principale | < 2.5s | Il bundle React deve essere piccolo e ottimizzato |
+| **FID** — First Input Delay | Reattività al primo click dell'utente | < 100ms | Il JS non deve bloccare il thread principale |
+| **CLS** — Cumulative Layout Shift | Stabilità visiva (elementi che saltano) | < 0.1 | Evitare layout shifts durante il caricamento dati |
+| **TTFB** — Time to First Byte | Tempo di risposta del server | < 800ms | Il cold start di Azure influenza negativamente questo valore |
+
+---
+
+## Riepilogo Capitolo 2
+
+| Concetto | Come si manifesta in Split Mate |
+|----------|---------------------------------|
+| SPA | React su Vercel, nessun reload di pagina, routing gestito da JavaScript |
+| MPA | Non usata — confronto utile per l'esame |
+| SSR | Non usata (CSR puro) — possibile evoluzione futura con Next.js |
+| AJAX | Ogni `fetch()` in `api.js` è una chiamata AJAX asincrona |
+| Pattern MVC | Controller C# + Model EF Core + View React |
+| REST Livello 2 | URL semantici per le risorse + verbi HTTP corretti per le azioni |
+| Architettura Disaccoppiata | Frontend Vercel + Backend Azure, comunicazione solo tramite JSON |
+
+---
+
+# Capitolo 3 — REST e API Design
+
+> Questo capitolo approfondisce i principi REST, il Richardson Maturity Model, e documenta in dettaglio tutti gli endpoint del progetto Split Mate con la loro logica di business.
+
+---
+
+## 3.1 Cos'è REST — Roy Fielding e i 6 Vincoli
+
+### La Storia
+
+**REST** (REpresentational State Transfer) è uno stile architetturale definito da **Roy Fielding** nella sua dissertazione dottorale all'Università della California nel **2000**. Fielding era uno degli autori principali delle specifiche HTTP/1.0 e HTTP/1.1, quindi REST nasce come una riflessione su come usare al meglio le caratteristiche già presenti nel protocollo HTTP.
+
+> REST non è un protocollo, non è uno standard, non è una libreria. È un **insieme di vincoli architetturali**. Un sistema che rispetta tutti i vincoli si dice **RESTful**.
+
+### I 6 Vincoli di REST
+
+#### 1. Client-Server
+
+Il sistema è diviso in due ruoli distinti con una separazione netta delle responsabilità:
+- Il **client** gestisce l'interfaccia utente e l'esperienza
+- Il **server** gestisce i dati e la logica di business
+
+Questi due ruoli evolvono indipendentemente: puoi riscrivere il frontend senza toccare il backend, e viceversa.
+
+**In Split Mate**: React (client) su Vercel e ASP.NET Core (server) su Azure sono completamente separati. Comunicano solo tramite HTTP/JSON.
+
+#### 2. Stateless (Senza Stato)
+
+Ogni richiesta al server deve contenere **tutte le informazioni necessarie** per essere elaborata. Il server non mantiene memoria delle richieste precedenti.
+
+Questo significa:
+- Nessuna sessione server-side (no session ID in memoria)
+- Ogni richiesta è autosufficiente
+- Il server può scalare orizzontalmente (qualsiasi istanza può gestire qualsiasi richiesta)
+
+**In Split Mate**: non usiamo sessioni server-side. Quando React chiama `GET /api/Gruppo/utente/5`, il numero `5` è l'ID utente che deve essere passato esplicitamente — il server non lo ricorda da una chiamata precedente.
+
+> **Attenzione**: stateless non significa che i dati non vengono salvati. I dati persistono nel database. È lo **stato della sessione** che non viene mantenuto.
+
+#### 3. Cacheable
+
+Le risposte devono dichiarare esplicitamente se possono essere memorizzate nella cache. Una risposta cacheable può essere riutilizzata da client e proxy intermedi, riducendo il carico sul server.
+
+**In Split Mate**: non gestiamo esplicitamente la cache (le risposte non hanno header `Cache-Control` configurati manualmente), ma il browser applica comunque le policy di default.
+
+#### 4. Uniform Interface (Interfaccia Uniforme)
+
+Questo è il vincolo più caratteristico di REST. Si compone di 4 sotto-vincoli:
+
+| Sotto-vincolo | Significato | In Split Mate |
+|---------------|-------------|---------------|
+| **Identificazione delle risorse** | Ogni risorsa ha un URI univoco | `/api/Spesa/3` identifica la spesa con ID 3 |
+| **Manipolazione tramite rappresentazioni** | Il client modifica le risorse inviando una rappresentazione (JSON) | Il body JSON contiene i campi da aggiornare |
+| **Messaggi auto-descrittivi** | Ogni messaggio contiene abbastanza info per essere elaborato | Header `Content-Type: application/json` |
+| **HATEOAS** | Le risposte contengono link alle azioni possibili | **Non implementato** (siamo al Livello 2) |
+
+#### 5. Layered System (Sistema a Livelli)
+
+Il client non sa se sta comunicando direttamente con il server finale o con un intermediario (proxy, load balancer, CDN). Ogni livello vede solo il livello adiacente.
+
+**In Split Mate**: il browser non sa che la richiesta al frontend passa per la CDN di Vercel, né che il backend è dietro il reverse proxy di Azure App Service.
+
+#### 6. Code on Demand (Opzionale)
+
+Il server può inviare codice eseguibile al client (es. JavaScript). È l'unico vincolo **opzionale** di REST.
+
+**In Split Mate**: tecnicamente Vercel invia il bundle JavaScript di React al browser, ma questo è un pattern standard delle SPA, non un uso particolare di REST.
+
+---
+
+## 3.2 Richardson REST Maturity Model
+
+Leonard Richardson (2008) ha proposto un modello per misurare quanto un'API è "matura" in termini di aderenza ai principi REST, organizzato in **4 livelli** (0-3).
+
+### Livello 0 — The Swamp of POX
+
+Un solo endpoint che accetta tutto tramite POST. L'azione è descritta nel body della richiesta.
+
+```http
+# Esempio Livello 0
+POST /api
+Body: { "azione": "getSpesa", "id": 3 }
+
+POST /api
+Body: { "azione": "deleteSpesa", "id": 3 }
+```
+
+Non si usa HTTP come strumento, solo come tunnel. Tipico dei vecchi SOAP/XML-RPC.
+
+### Livello 1 — Resources
+
+Si introducono URL diversi per risorse diverse, ma si usa ancora un solo verbo HTTP per tutto.
+
+```http
+# Esempio Livello 1
+POST /api/Spesa        # crea
+POST /api/Spesa/3      # leggi o modifica o cancella, dipende dal body
+POST /api/Gruppo       # tutto con POST
+```
+
+Migliore del Livello 0, ma i verbi HTTP non vengono usati semanticamente.
+
+### Livello 2 — HTTP Verbs
+
+Si usano correttamente i verbi HTTP e gli status code. È il livello de facto delle API moderne.
+
+```http
+# Esempio Livello 2 (quello che facciamo in Split Mate)
+GET    /api/Spesa/3     # leggi
+PUT    /api/Spesa/3     # modifica
+DELETE /api/Spesa/3    # cancella
+POST   /api/Spesa      # crea
+
+# Con status code semantici
+200 OK          # lettura riuscita
+201 Created     # creazione riuscita
+204 No Content  # delete riuscita
+404 Not Found   # risorsa non trovata
+```
+
+### Livello 3 — Hypermedia Controls (HATEOAS)
+
+Le risposte includono link alle azioni successive possibili. Il client non deve conoscere a priori gli URL dell'API.
+
+```json
+// Esempio Livello 3 — risposta con HATEOAS
+{
+  "id": 3,
+  "descrizione": "Cena",
+  "importo": 45.00,
+  "_links": {
+    "self": { "href": "/api/Spesa/3" },
+    "update": { "href": "/api/Spesa/3", "method": "PUT" },
+    "delete": { "href": "/api/Spesa/3", "method": "DELETE" },
+    "gruppo": { "href": "/api/Gruppo/1" }
+  }
+}
+```
+
+Raro in pratica: richiede molto lavoro e i client in genere hardcodano gli URL comunque.
+
+### Dove Si Posiziona Split Mate
+
+**Split Mate è al Livello 2**, che è il livello standard nell'industria. Usiamo:
+- URL semantici per le risorse (`/api/Spesa/{id}`, `/api/Gruppo/{id}`)
+- Verbi HTTP con significato corretto (GET legge, POST crea, PUT aggiorna, DELETE elimina)
+- Status code appropriati (200, 201, 204, 400, 401, 404)
+
+Non implementiamo HATEOAS (Livello 3) perché aggiunge complessità senza benefici concreti per un progetto di questa scala.
+
+---
+
+## 3.3 I Nostri Endpoint Documentati
+
+### AuthController — `/api/Auth`
+
+| Metodo | Endpoint | Body Richiesta | Risposta | Descrizione |
+|--------|----------|----------------|----------|-------------|
+| `POST` | `/api/Auth/login` | `{ email, password }` | `200 UtenteDto` / `401` | Login o auto-provisioning |
+| `GET` | `/api/Auth/exists` | `?email=...` (query param) | `200 { exists: bool }` | Verifica se l'email è registrata |
+
+**Logica speciale**: `POST /api/Auth/login` implementa l'**Auto-Provisioning**. Se l'email non esiste nel database, l'utente viene creato automaticamente (registrazione implicita). Se esiste, verifica la password con BCrypt.
+
+### GruppoController — `/api/Gruppo`
+
+| Metodo | Endpoint | Body / Params | Risposta | Descrizione |
+|--------|----------|--------------|----------|-------------|
+| `GET` | `/api/Gruppo/utente/{utenteId}` | — | `200 List<GruppoDto>` | Gruppi dell'utente |
+| `POST` | `/api/Gruppo` | `{ nome, descrizione, creatoDA_ID }` | `201 GruppoDto` | Crea gruppo |
+| `DELETE` | `/api/Gruppo/{id}` | — | `204` / `404` | Elimina gruppo |
+| `GET` | `/api/Gruppo/codice/{codice}` | — | `200 GruppoDto` / `404` | Trova per codice invito |
+| `POST` | `/api/Gruppo/{id}/membri` | `{ utenteId }` | `200` / `404` | Aggiungi membro |
+| `DELETE` | `/api/Gruppo/{gruppoId}/membri/{utenteId}` | — | `204` / `400` | Rimuovi membro |
+| `POST` | `/api/Gruppo/{id}/bot` | `{ nome }` | `201 UtenteDto` | Crea utente bot |
+
+### SpesaController — `/api/Spesa`
+
+| Metodo | Endpoint | Body / Params | Risposta | Descrizione |
+|--------|----------|--------------|----------|-------------|
+| `GET` | `/api/Spesa/gruppo/{gruppoId}` | — | `200 List<SpesaDto>` | Spese del gruppo |
+| `POST` | `/api/Spesa` | `NuovaSpesaDto` | `201 SpesaDto` | Crea spesa con divisioni |
+| `PUT` | `/api/Spesa/{id}` | `ModificaSpesaDto` | `200 SpesaDto` / `404` | Modifica spesa |
+| `DELETE` | `/api/Spesa/{id}` | — | `204` / `404` | Elimina spesa |
+
+### UtenteController — `/api/Utente`
+
+| Metodo | Endpoint | Body / Params | Risposta | Descrizione |
+|--------|----------|--------------|----------|-------------|
+| `PUT` | `/api/Utente/{id}/nome` | `{ nuovoNome }` | `200` / `404` | Aggiorna nome utente |
+| `GET` | `/api/Utente/gruppo/{gruppoId}` | — | `200 List<UtenteDto>` | Utenti di un gruppo |
+
+### RiepilogoController — `/api/Riepilogo`
+
+| Metodo | Endpoint | Body / Params | Risposta | Descrizione |
+|--------|----------|--------------|----------|-------------|
+| `GET` | `/api/Riepilogo/gruppo/{gruppoId}` | — | `200 List<RiepilogoDto>` | Calcola debiti del gruppo |
+| `PUT` | `/api/Riepilogo/{id}/Saldato` | — | `200` / `404` | Marca debito come saldato |
+
+---
+
+## 3.4 Swagger — Documentazione Interattiva
+
+**Swagger** (basato su **OpenAPI Specification**) è uno strumento che genera automaticamente documentazione interattiva per le API REST.
+
+### Come Funziona in ASP.NET Core
+
+ASP.NET Core con `Swashbuckle.AspNetCore` legge i **metadati dei controller** (attributi `[HttpGet]`, `[HttpPost]`, tipi di ritorno, parametri) e genera automaticamente:
+1. Un file JSON di specifica OpenAPI (`/swagger/v1/swagger.json`)
+2. Un'interfaccia web interattiva (`/swagger`)
+
+### Configurazione in Program.cs
+
+```csharp
+// Registrazione del servizio
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Abilitazione nella pipeline (solo in development)
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+```
+
+> **Nel nostro progetto** Swagger è abilitato anche in production (Azure), così è possibile testare le API live all'indirizzo:
+> `https://gestione-spese-hbhga0crf6hsagdn.swedencentral-01.azurewebsites.net/swagger`
+
+### Vantaggi di Swagger nel Progetto
+
+- **Durante lo sviluppo**: testare ogni endpoint senza scrivere codice frontend
+- **Documentazione sempre aggiornata**: riflette automaticamente il codice reale
+- **Contratto API**: il frontend sa esattamente quali endpoint esistono e quali parametri accettano
+- **Demo all'esame**: mostrare le API funzionanti in tempo reale
+
+---
+
+## 3.5 DTO — Data Transfer Object
+
+### Cos'è un DTO
+
+Un **Data Transfer Object** è un oggetto usato esclusivamente per **trasportare dati** tra il client e il server (o tra layer applicativi). Non contiene logica di business, solo proprietà.
+
+Il DTO è **diverso** dal Model del database:
+
+```
+Model (Entity)          DTO
+--------------          ---
+Spesa.cs                SpesaDto.cs
+  Id                      Id
+  Descrizione             Descrizione
+  Importo                 Importo
+  GruppoId (FK)           NomeGruppo  ← campo calcolato/aggregato
+  ChiPagaId (FK)          NomePagatore ← join già risolto
+  PasswordHash  ← MAI nel DTO! (campo sensibile)
+```
+
+### Perché Usare i DTO
+
+| Motivo | Spiegazione |
+|--------|-------------|
+| **Sicurezza** | Evitare di esporre campi sensibili (es. `PasswordHash`) |
+| **Flessibilità** | Restituire strutture diverse da quelle del database |
+| **Disaccoppiamento** | Il client non dipende dalla struttura interna del DB |
+| **Versioning** | Puoi cambiare il Model senza rompere i client |
+| **Performance** | Trasferire solo i dati necessari, non l'intera entità |
+
+### I DTO in Split Mate
+
+```csharp
+// LoginDto — riceve le credenziali
+public class LoginDto
+{
+    public string Email { get; set; }
+    public string Password { get; set; }  // password in chiaro (solo in arrivo)
+}
+
+// UtenteDto — restituisce i dati utente (senza hash!)
+public class UtenteDto
+{
+    public int Id { get; set; }
+    public string Nome { get; set; }
+    public string Email { get; set; }
+    public bool IsBot { get; set; }
+    // PasswordHash NON è incluso!
+}
+
+// NuovaSpesaDto — riceve i dati per creare una spesa
+public class NuovaSpesaDto
+{
+    public string Descrizione { get; set; }
+    public decimal Importo { get; set; }
+    public int GruppoId { get; set; }
+    public int ChiPagaId { get; set; }
+    public List<int> UtentiCoinvoltiIds { get; set; }
+}
+```
+
+### Il Flusso con i DTO
+
+```
+React invia JSON
+       |
+       | POST /api/Spesa
+       | Body: { descrizione, importo, gruppoId, chiPagaId, utentiIds }
+       v
+ASP.NET Core deserializza in NuovaSpesaDto
+       |
+       v
+Controller usa NuovaSpesaDto per creare entità Spesa
+       |
+       v
+EF Core salva l'entità Spesa nel database
+       |
+       v
+Controller crea SpesaDto dalla Spesa salvata
+       |
+       v
+ASP.NET Core serializza SpesaDto in JSON
+       |
+       | Response: 201 Created
+       | Body: { id, descrizione, importo, nomePagatore, ... }
+       v
+React riceve il DTO (senza dati interni del DB)
+```
+
+---
+
+## Riepilogo Capitolo 3
+
+| Concetto | Come si manifesta in Split Mate |
+|----------|---------------------------------|
+| REST (Roy Fielding, 2000) | 6 vincoli: Client-Server, Stateless, Cacheable, Uniform Interface, Layered, Code on Demand |
+| Richardson Livello 2 | URL semantici + verbi HTTP + status code corretti |
+| Endpoint documentati | 5 controller, ~15 endpoint totali con GET/POST/PUT/DELETE |
+| Swagger/OpenAPI | Interfaccia interattiva su `/swagger`, generata automaticamente |
+| DTO | Oggetti separati per input (LoginDto, NuovaSpesaDto) e output (UtenteDto, SpesaDto) |
